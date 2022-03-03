@@ -5,9 +5,9 @@ from dotenv import load_dotenv
 import os
 import json
 import pandas
-from node_element import NodeElement
-from singleton import DoubleKeyDict
-from suscription_handler import SubscriptionHandler
+from app.node_element import NodeElement
+from app.singleton import DoubleKeyDict
+from app.suscription_handler import SubscriptionHandler
 
 load_dotenv()
 logging.basicConfig(level=logging.INFO)
@@ -18,7 +18,7 @@ nodes_dict = DoubleKeyDict()
 
 
 def get_nodes_from_xl():
-    file = pandas.read_excel("nodes.xlsx")
+    file = pandas.read_excel("./app/nodes.xlsx")
     for i in range(file.shape[0]):
         series = file.loc[i]
         item = series[0]
@@ -35,20 +35,20 @@ def get_servers_from_config():
     _logger.info(servers_addresses)
 
 
-async def browse_nodes(node: Node, list=[]):
-    list.append(node.nodeid.to_string())
+async def browse_nodes(node: Node, nodes_list=[]):
+    nodes_list.append(node.nodeid.to_string())
     children = await node.get_children()
     if len(children) == 0:
         return
     for child in children:
-        await browse_nodes(child, list)
-    return list
+        await browse_nodes(child, nodes_list)
+    return nodes_list
 
 
 async def connect_to_servers():
     for address in servers_addresses:
+        client = Client(address)
         try:
-            client = Client(address)
             await client.connect()
             server_nodes = await browse_nodes(client.nodes.objects)
             _logger.info(server_nodes)
@@ -58,8 +58,10 @@ async def connect_to_servers():
                 _logger.info(f"Server with address {address} doesn't have necessary nodes")
                 continue
             await subscribe_to_server_nodes(client, required_nodes)
-        except Exception:
-            _logger.exception("error")
+        except TimeoutError:
+            _logger.exception(f"Unable to connect to server with address {address}")
+        finally:
+            await client.disconnect()
 
 
 async def subscribe_to_server_nodes(client: Client, nodes_ids_str):

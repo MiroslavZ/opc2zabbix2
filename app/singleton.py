@@ -7,11 +7,6 @@ class SingletonBase(type):
         return cls._instances[cls]
 
 
-class SingletonDict(metaclass=SingletonBase):
-    def __init__(self):
-        self.dictionary = {}
-
-
 class DoubleKeyDict(metaclass=SingletonBase):
     def __init__(self):
         self.node_elements = {}  # fast search node_element by node_id

@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-from singleton import DoubleKeyDict
-from server_interactions import get_nodes_from_xl, get_servers_from_config, connect_to_servers
+from app.singleton import DoubleKeyDict
+from app.server_interactions import get_nodes_from_xl, get_servers_from_config, connect_to_servers
 
 app = FastAPI()
 nodes_dict = DoubleKeyDict()

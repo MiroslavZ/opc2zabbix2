@@ -1,0 +1,7 @@
+uvicorn~=0.17.5
+fastapi~=0.74.1
+pydantic~=1.9.0
+pandas~=1.4.1
+asyncua~=0.9.92
+python-dotenv~=0.19.2
+openpyxl
