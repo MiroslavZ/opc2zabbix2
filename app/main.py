@@ -1,6 +1,9 @@
 from fastapi import FastAPI
+
+from app.files_interactions import get_servers_from_config, get_nodes_from_xl
+from app.server_interactions import connect_to_servers
 from app.singleton import DoubleKeyDict
-from app.server_interactions import get_nodes_from_xl, get_servers_from_config, connect_to_servers
+
 
 app = FastAPI()
 nodes_dict = DoubleKeyDict()
@@ -18,4 +21,4 @@ async def get_last_measurement(key: str):
     if key in nodes_dict.measurements.keys():
         return nodes_dict.measurements[key]
     else:
-        return f"Node with id {key} not found"
+        return f"Node with key {key} not found"

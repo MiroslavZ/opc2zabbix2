@@ -1,73 +1,45 @@
+import asyncio
 import logging
-from asyncua import Node, Client
+from asyncua import Client
 from asyncua.ua import NodeId
-from dotenv import load_dotenv
-import os
-import json
-import pandas
-from app.node_element import NodeElement
-from app.singleton import DoubleKeyDict
+
+from app.files_interactions import get_servers_from_config, get_nodes_from_xl
+from app.singleton import SingletonDict
 from app.suscription_handler import SubscriptionHandler
 
-load_dotenv()
 logging.basicConfig(level=logging.INFO)
-_logger = logging.getLogger('asyncua')
-servers_addresses = []
-nodes_from_xl = []
-nodes_dict = DoubleKeyDict()
+_logger = logging.getLogger('server_interactions')
 
-
-def get_nodes_from_xl():
-    file = pandas.read_excel("./app/nodes.xlsx")
-    for i in range(file.shape[0]):
-        series = file.loc[i]
-        item = series[0]
-        key = series[1]
-        node_id = series[2]
-        node_element = NodeElement(item, key, node_id)
-        nodes_from_xl.append(node_id)
-        nodes_dict.node_elements[node_id] = node_element
-
-
-def get_servers_from_config():
-    servers_json = os.getenv("SERVERS")
-    servers_addresses.extend(json.loads(servers_json))
-    _logger.info(servers_addresses)
-
-
-async def browse_nodes(node: Node, nodes_list=[]):
-    nodes_list.append(node.nodeid.to_string())
-    children = await node.get_children()
-    if len(children) == 0:
-        return
-    for child in children:
-        await browse_nodes(child, nodes_list)
-    return nodes_list
+servers = SingletonDict()
 
 
 async def connect_to_servers():
-    for address in servers_addresses:
+    for server_key in servers.dictionary.keys():
+        server = servers.dictionary[server_key]
+        _logger.info(server)
+        address = server.address
         client = Client(address)
         try:
+            _logger.info(f"Connecting to server {server.name} with address {address}")
             await client.connect()
-            server_nodes = await browse_nodes(client.nodes.objects)
-            _logger.info(server_nodes)
-            required_nodes = list(filter(lambda n: n in nodes_from_xl, server_nodes))
-            _logger.info(required_nodes)
+            nodes_list = map(lambda node: node.node_id, server.nodes)
+            required_nodes = list(await get_required_nodes(client, nodes_list))
             if len(required_nodes) < 1:
                 _logger.info(f"Server with address {address} doesn't have necessary nodes")
                 continue
             await subscribe_to_server_nodes(client, required_nodes)
         except TimeoutError:
             _logger.exception(f"Unable to connect to server with address {address}")
-        finally:
             await client.disconnect()
 
 
-async def subscribe_to_server_nodes(client: Client, nodes_ids_str):
-    handler = SubscriptionHandler()
+async def get_required_nodes(client: Client, nodes_ids_str):
     nodes_ids = map(lambda ns: NodeId.from_string(ns), nodes_ids_str)
-    nodes = map(lambda ni: client.get_node(ni), nodes_ids)
+    return map(lambda node_id: client.get_node(node_id), nodes_ids)
+
+
+async def subscribe_to_server_nodes(client: Client, nodes):
+    handler = SubscriptionHandler()
     subscription = await client.create_subscription(500, handler)
     await subscription.subscribe_data_change(nodes)
 

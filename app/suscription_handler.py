@@ -3,19 +3,19 @@ from app.models import Measurement
 from app.singleton import DoubleKeyDict
 import logging
 
-logging.basicConfig(level=logging.INFO)
+
 _logger = logging.getLogger('asyncua')
 nodes_dict = DoubleKeyDict()
 
 
 class SubscriptionHandler:
     async def datachange_notification(self, node: Node, val, data):
-
         node_id = node.nodeid.to_string()
-        if node_id not in nodes_dict.node_elements:
+        if node_id not in nodes_dict.node_elements.keys():
+            _logger.warning(f"Received notification from unknown node ({node_id}) ")
             raise KeyError
         key = nodes_dict.node_elements[node_id].key
-        if key in nodes_dict.measurements:
+        if key in nodes_dict.measurements.keys():
             nodes_dict.measurements[key].last_value = val
         else:
             display_name = (await node.read_display_name()).Text

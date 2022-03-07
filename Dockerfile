@@ -3,6 +3,8 @@ FROM python:3.10
 WORKDIR /code
 
 COPY ./requirements.txt /code/requirements.txt
+COPY ./nodes.xlsx /code/nodes.xlsx
+COPY ./.env /code/.env
 
 RUN pip install -r /code/requirements.txt
 
