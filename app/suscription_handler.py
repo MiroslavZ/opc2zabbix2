@@ -22,3 +22,6 @@ class SubscriptionHandler:
             value_type = await node.read_data_type_as_variant_type()
             measurement = Measurement(node_id, display_name, value_type, val)
             nodes_dict.measurements[key] = measurement
+
+    def event_notification(self, event):
+        print("New event", event)
