@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, status
 
 from app.files_interactions import get_servers_from_config, get_nodes_from_xl
 from app.server_interactions import connect_to_servers
@@ -21,4 +21,4 @@ async def get_last_measurement(key: str):
     if key in nodes_dict.measurements.keys():
         return nodes_dict.measurements[key]
     else:
-        return f"Node with key {key} not found"
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Measurement for node with key {key} not found")
