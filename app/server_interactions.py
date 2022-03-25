@@ -8,8 +8,8 @@ from app.files_interactions import get_servers_from_config, get_nodes_from_xl
 from app.singleton import SingletonDict
 from app.suscription_handler import SubscriptionHandler
 
-logging.basicConfig(level=logging.INFO)
-_logger = logging.getLogger('server_interactions')
+
+_logger = logging.getLogger(__name__)
 
 servers = SingletonDict()
 
@@ -26,14 +26,15 @@ async def run_connect_cycle(server: Server):
     subscription = None
     handles = None
     state = 1
+    _logger.info(f"Started connect cycle for {server.name}")
     while 1:
         if state == 1:  # connect
             try:
                 await client.connect()
-                _logger.info(f"Client connected to {server}")
+                _logger.info(f"Client successfully connected to {server.name}")
                 state = 2
             except:
-                _logger.exception(f"Unable to connect to server with address {address}")
+                _logger.warning(f"Unable to connect to server {server.name}")
                 state = 1
                 await asyncio.sleep(2)
         elif state == 2:  # get nodes & subscribe
@@ -45,7 +46,7 @@ async def run_connect_cycle(server: Server):
                 _logger.info(f"Created subscription for {server.name}")
                 state = 3
             except:
-                _logger.exception(f"Error with subscription to {server}")
+                _logger.warning(f"Error with subscription to {server.name}")
                 state = 4
                 await asyncio.sleep(0)
         elif state == 3:  # read cyclic the service level if it fails disconnect & unsubscribe => reconnect
@@ -53,25 +54,27 @@ async def run_connect_cycle(server: Server):
             try:
                 node = client.get_node(server.nodes[0].node_id)  # unreliable check
                 value = await node.get_value()
-                _logger.info("Server status checked successfully")
+                _logger.info(f"Status of server {server.name} checked successfully")
             except:
                 state = 4
-                _logger.info("Error with checking server status")
+                _logger.warning(f"Error with checking status of server {server.name}")
             await asyncio.sleep(2)
         elif state == 4:  # unsubscribe, delete subscription then disconnect
             try:
+                _logger.info(f"Unsubscribing from server {server.name}")
                 if handles:
                     await subscription.unsubscribe(handles)
                 await subscription.delete()
             except:
-                _logger.exception(f"Error with unsubscribing with {server}")
+                _logger.exception(f"Error with unsubscribing from {server.name}")
                 subscription = None
                 handles = []
                 await asyncio.sleep(0)
             try:
+                _logger.info(f"Disconnecting from {server.name}")
                 await client.disconnect()
             except:
-                _logger.exception(f"Error with disconnecting with {server}")
+                _logger.warning(f"Error with disconnecting from {server.name}")
             state = 0
         else:
             state = 1

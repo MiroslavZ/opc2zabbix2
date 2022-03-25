@@ -1,3 +1,5 @@
+import logging
+
 from fastapi import FastAPI, HTTPException, status
 
 from app.files_interactions import get_servers_from_config, get_nodes_from_xl
@@ -16,9 +18,13 @@ async def startup_event():
     await connect_to_servers()
 
 
+_logger = logging.getLogger(__name__)
+
+
 @app.get("/measurements/{key}")
 async def get_last_measurement(key: str):
     if key in nodes_dict.measurements.keys():
         return nodes_dict.measurements[key]
     else:
+        _logger.warning(f"Requesting data using an unknown key {key}")
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Measurement for node with key {key} not found")
