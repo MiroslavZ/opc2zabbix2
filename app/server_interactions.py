@@ -32,6 +32,7 @@ async def run_connect_cycle(server: Server):
             try:
                 await client.connect()
                 _logger.info(f"Client successfully connected to {server.name}")
+                server.status.connection = True
                 state = 2
             except:
                 _logger.warning(f"Unable to connect to server {server.name}")
@@ -50,12 +51,9 @@ async def run_connect_cycle(server: Server):
                 state = 4
                 await asyncio.sleep(0)
         elif state == 3:  # read cyclic the service level if it fails disconnect & unsubscribe => reconnect
-            # status = await check_service_level(client)
-            try:
-                node = client.get_node(server.nodes[0].node_id)  # unreliable check
-                value = await node.get_value()
-                _logger.info(f"Status of server {server.name} checked successfully")
-            except:
+            simple_check = await check_first_node(client, server)
+            normal_service_level = await check_service_level(client, server)
+            if not normal_service_level and not simple_check:
                 state = 4
                 _logger.warning(f"Error with checking status of server {server.name}")
             await asyncio.sleep(2)
@@ -73,6 +71,7 @@ async def run_connect_cycle(server: Server):
             try:
                 _logger.info(f"Disconnecting from {server.name}")
                 await client.disconnect()
+                server.status.connection = False
             except:
                 _logger.warning(f"Error with disconnecting from {server.name}")
             state = 0
@@ -93,13 +92,29 @@ async def subscribe_to_server_nodes(client: Client, nodes):
     return subscription, handles
 
 
-async def check_service_level(client: Client):
+async def check_service_level(client: Client, server: Server):
     # what's if we haven't service level node?
-    service_level = await client.nodes.service_level.get_value()
-    if service_level >= 200:
-        return 3
-    else:
-        return 4
+    try:
+        service_level = await client.nodes.service_level.get_value()
+        server.status.service_level = service_level
+        if service_level >= 200:
+            return True
+        else:
+            return False
+    except:
+        server.status.service_level = "unknown"
+        _logger.warning(f"Failed to check server {server.name} status via service_level node")
+        return False
+
+
+async def check_first_node(client: Client, server: Server):
+    try:
+        node = client.get_node(server.nodes[0].node_id)  # unreliable check
+        value = await node.get_value()
+        return True
+    except:
+        return False
+
 
 
 # if __name__ == '__main__':
