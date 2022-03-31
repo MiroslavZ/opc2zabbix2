@@ -42,12 +42,15 @@ async def get_server_status(name: str):
 
 @app.get("/control/{command}")
 async def control(command: str):
-    connections = list(map(lambda server: server.status.connected, servers.dictionary.values()))
-    if command == "stop" and (True in connections):
+    if command == "stop":
         await stop_connect_cycles()
         return "connection task stopped, subscription deleted, client disconnected"
-    elif command == "start" and (False in connections):
+    elif command == "start":
         await connect_to_servers()
         return "connecting started"
+    elif command == "restart":
+        await stop_connect_cycles()
+        await connect_to_servers()
+        return "restarting"
     else:
         return "unknown command"

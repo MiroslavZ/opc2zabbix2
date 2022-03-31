@@ -119,6 +119,7 @@ async def check_first_node(client: Client, server: Server):
         value = await node.get_value()
         return True
     except:
+        _logger.warning(f"Simple check by reading first node from server {server.name} is failed")
         return False
 
 
@@ -127,7 +128,11 @@ async def stop_connect_cycles():
         server = servers.dictionary[server_key]
         params = server.connection_params
         task = params.connection_task
-        task.cancel()
+        cancelled = task.cancelled()
+        if not cancelled:
+            task.cancel()
+        if not server.status.connected:  # server already disconnected in connect cycle
+            return
         try:
             await task
         except asyncio.CancelledError:
@@ -138,7 +143,7 @@ async def stop_connect_cycles():
                     await server.connection_params.subscription.unsubscribe(server.connection_params.handles)
                 await server.connection_params.subscription.delete()
             except:
-                _logger.exception(f"Error with unsubscribing from {server.name}")
+                _logger.warning(f"Error with unsubscribing from {server.name}")
                 server.connection_params.subscription = None
                 server.connection_params.handles = []
                 await asyncio.sleep(0)
