@@ -33,14 +33,13 @@ async def get_last_measurement(key: str):
 @app.get("/servers/{name}")
 async def get_server_status(name: str):
     if name in servers.dictionary.keys():
-        # return servers.dictionary[name] # all server info
         return servers.dictionary[name].status
     else:
         _logger.warning(f"Server status query with unknown name {name}")
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Server named {name} not found")
 
 
-@app.get("/control/{command}")
+@app.get("/control/{command}", description="Endpoint to control the gateway connection. Supported commands: \"start\", \"stop\", \"restart\"")
 async def control(command: str):
     if command == "stop":
         await stop_connect_cycles()

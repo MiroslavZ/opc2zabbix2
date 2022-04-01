@@ -19,6 +19,9 @@ servers = SingletonDict()
 async def connect_to_servers():
     for server_key in servers.dictionary.keys():
         server = servers.dictionary[server_key]
+        if server.status.connected:
+            _logger.warning(f"Trying to connect to already connected server {server.name}")
+            continue
         task = asyncio.create_task(run_connect_cycle(server))
         params = ConnectionParams(connection_task=task)
         server.connection_params = params
