@@ -4,6 +4,7 @@ import json
 import pandas
 from dotenv import load_dotenv
 from app.additional_classes import Node, Server
+from app.models import Measurement
 from app.singleton import SingletonDict, DoubleKeyDict
 
 load_dotenv()
@@ -30,6 +31,7 @@ def get_nodes_from_xl():
             node = Node(item, key, node_id)
             server.nodes.append(node)
             nodes_dict.node_elements[node_id] = node
+            nodes_dict.measurements[key] = Measurement(node_id)
         servers.dictionary[server.name] = server
         _logger.info(f"Loaded server {server.name} with {len(server.nodes)} nodes")
 

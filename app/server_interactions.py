@@ -7,13 +7,14 @@ from asyncua.ua import NodeId
 
 from app.additional_classes import Server, ConnectionParams
 from app.files_interactions import get_servers_from_config, get_nodes_from_xl
-from app.singleton import SingletonDict
+from app.singleton import SingletonDict, DoubleKeyDict
 from app.suscription_handler import SubscriptionHandler
 
 
 _logger = logging.getLogger(__name__)
 
 servers = SingletonDict()
+nodes_dict = DoubleKeyDict()
 
 
 async def connect_to_servers():
@@ -33,6 +34,7 @@ async def run_connect_cycle(server: Server):
     server.connection_params.subscription = None
     server.connection_params.handles = None
     state = 1
+    required_nodes = []
     _logger.info(f"Started connect cycle for {server.name}")
     while 1:
         if state == 1:  # connect
@@ -60,9 +62,9 @@ async def run_connect_cycle(server: Server):
                 state = 4
                 await asyncio.sleep(0)
         elif state == 3:  # read cyclic the service level if it fails disconnect & unsubscribe => reconnect
-            simple_check = await check_first_node(server.connection_params.client, server)
-            normal_service_level = await check_service_level(server.connection_params.client, server)
-            if not normal_service_level and not simple_check:
+            service_level_is_normal = await check_service_level(server.connection_params.client, server)
+            all_nodes_is_normal = await check_nodes_health(required_nodes)
+            if not service_level_is_normal and not all_nodes_is_normal:
                 state = 4
                 _logger.warning(f"Error with checking status of server {server.name}")
             await asyncio.sleep(2)
@@ -106,24 +108,29 @@ async def check_service_level(client: Client, server: Server):
     try:
         service_level = await client.nodes.service_level.get_value()
         server.status.service_level = service_level
-        if service_level >= 200:
-            return True
-        else:
-            return False
+        return service_level >= 200
     except:
         server.status.service_level = "unknown"
         _logger.warning(f"Failed to check server {server.name} status via service_level node")
         return False
 
 
-async def check_first_node(client: Client, server: Server):
-    try:
-        node = client.get_node(server.nodes[0].node_id)  # unreliable check
-        value = await node.get_value()
-        return True
-    except:
-        _logger.warning(f"Simple check by reading first node from server {server.name} is failed")
-        return False
+async def check_nodes_health(nodes: list):
+    all_nodes_is_normal = True
+    for node in nodes:
+        node_id = node.nodeid.to_string()
+        key = nodes_dict.node_elements[node_id].key
+        try:
+            data_val = await node.read_data_value()
+            status = data_val.StatusCode.is_good()
+            if key in nodes_dict.measurements.keys():
+                nodes_dict.measurements[key].health_is_good = status
+        except:
+            all_nodes_is_normal = False
+            _logger.warning(f"Error with checking status of node {node.nodeid.to_string()}")
+            if key in nodes_dict.measurements.keys():
+                nodes_dict.measurements[key].health_is_good = False
+    return all_nodes_is_normal
 
 
 async def stop_connect_cycles():
@@ -156,9 +163,3 @@ async def stop_connect_cycles():
                 server.status.connected = False
             except:
                 _logger.warning(f"Error with disconnecting from {server.name}")
-
-
-# if __name__ == '__main__':
-#     get_nodes_from_xl()
-#     get_servers_from_config()
-#     asyncio.run(connect_to_servers())

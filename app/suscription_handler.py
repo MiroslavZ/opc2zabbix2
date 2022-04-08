@@ -4,7 +4,7 @@ from app.singleton import DoubleKeyDict
 import logging
 
 
-_logger = logging.getLogger('asyncua')
+_logger = logging.getLogger(__name__)
 nodes_dict = DoubleKeyDict()
 
 
@@ -13,9 +13,8 @@ class SubscriptionHandler:
         node_id = node.nodeid.to_string()
         if node_id not in nodes_dict.node_elements.keys():
             _logger.warning(f"Received notification from unknown node ({node_id}) ")
-            raise KeyError
         key = nodes_dict.node_elements[node_id].key
-        if key in nodes_dict.measurements.keys():
+        if key in nodes_dict.measurements.keys() and nodes_dict.measurements[key].last_value is not None:
             nodes_dict.measurements[key].last_value = val
         else:
             display_name = (await node.read_display_name()).Text
