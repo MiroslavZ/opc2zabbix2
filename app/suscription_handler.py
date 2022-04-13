@@ -9,7 +9,16 @@ nodes_dict = DoubleKeyDict()
 
 
 class SubscriptionHandler:
+    """
+    Класс обработчика подписок
+    """
     async def datachange_notification(self, node: Node, val, data):
+        """
+        Обработка уведомления об изменении показаний узла.
+        Создание обхъекта измерения и обновление показаний узла в нем
+        :param node: объект узла
+        :param val: значение узла
+        """
         node_id = node.nodeid.to_string()
         if node_id not in nodes_dict.node_elements.keys():
             _logger.warning(f"Received notification from unknown node ({node_id}) ")

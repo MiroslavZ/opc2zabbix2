@@ -1,12 +1,10 @@
 import asyncio
 import logging
-from asyncio import Task
 
 from asyncua import Client
 from asyncua.ua import NodeId
 
 from app.additional_classes import Server, ConnectionParams
-from app.files_interactions import get_servers_from_config, get_nodes_from_xl
 from app.singleton import SingletonDict, DoubleKeyDict
 from app.suscription_handler import SubscriptionHandler
 
@@ -18,6 +16,10 @@ nodes_dict = DoubleKeyDict()
 
 
 async def connect_to_servers():
+    """
+    Поключение к серверам. Планирование задачи на подключение для каждого сервера.
+    Сохранение ссылки на задачу для последующей отмены.
+    """
     for server_key in servers.dictionary.keys():
         server = servers.dictionary[server_key]
         if server.status.connected:
@@ -29,6 +31,15 @@ async def connect_to_servers():
 
 
 async def run_connect_cycle(server: Server):
+    """
+    Бесконечный цикл, state-машина
+    для переподключения и проверки состояния сервера
+    state 1 - подключение
+    state 2 - получение узлов и подписка
+    state 3 - циклическая проверка сервера и узлов
+    state 4 - отписка от узлов, удаление подписки, отсоединение клиента => state 1
+    :param server: Экземпляр сервера из словаря сереров
+    """
     address = server.address
     server.connection_params.client = Client(address)
     server.connection_params.subscription = None
@@ -92,11 +103,23 @@ async def run_connect_cycle(server: Server):
 
 
 async def get_required_nodes(client: Client, nodes_ids_str):
+    """
+    Формирование списка узлов по списку их node id.
+    client.get_node не провряет существование узла на сервере!
+    :param client: Экземпляр OPC-клиента для получения узлов
+    :param nodes_ids_str: Список строковых представлений node id узлов
+    """
     nodes_ids = map(lambda ns: NodeId.from_string(ns), nodes_ids_str)
     return map(lambda node_id: client.get_node(node_id), nodes_ids)
 
 
 async def subscribe_to_server_nodes(client: Client, nodes):
+    """
+    Подписка на узлы
+    :param client: Экземпляр OPC-клиента для создания подписки
+    :param nodes: Список узлов для подписки
+    :return: Экземпляр подписки и список элементов для отмены подписки
+    """
     handler = SubscriptionHandler()
     subscription = await client.create_subscription(500, handler)
     handles = await subscription.subscribe_data_change(nodes)
@@ -104,7 +127,14 @@ async def subscribe_to_server_nodes(client: Client, nodes):
 
 
 async def check_service_level(client: Client, server: Server):
-    # what's if we haven't service level node?
+    """
+    Проверка здоровья сервера через значение service level узла
+    При отсутствии узла - unknown
+    :param client: Экземпляр клиента
+    :param server: Экземпляр сервера из словаря сереров
+    :return: True - здоровье сервера в норме,
+    False - с сервером проблемы / не удалось проверить service level
+    """
     try:
         service_level = await client.nodes.service_level.get_value()
         server.status.service_level = service_level
@@ -116,6 +146,12 @@ async def check_service_level(client: Client, server: Server):
 
 
 async def check_nodes_health(nodes: list):
+    """
+    Проверка здоровья узлов сервера.
+    При значении отличном от GOOD в asyncua вызывается исключение.
+    :param nodes: список узлов для проверки
+    :return: True - все узлы впорядке, False - есть проблемные узлы
+    """
     all_nodes_is_normal = True
     for node in nodes:
         node_id = node.nodeid.to_string()
@@ -134,6 +170,11 @@ async def check_nodes_health(nodes: list):
 
 
 async def stop_connect_cycles():
+    """
+    Остановка шлюза.
+    Отмена задчи на подключение, изменение статуса подключения,
+    отписка от узлов, удаление подписки, отсоединение клиента
+    """
     for server_key in servers.dictionary.keys():
         server = servers.dictionary[server_key]
         params = server.connection_params

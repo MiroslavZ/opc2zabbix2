@@ -17,6 +17,11 @@ nodes_dict = DoubleKeyDict()
 
 
 def get_nodes_from_xl():
+    """
+    Чтение списков узлов из excel файла и сохранение в словарь.
+    Имена листов документа соответствуют именам серверов
+    из конфиг файла.
+    """
     file = pandas.ExcelFile("nodes.xlsx")
     sheets = file.sheet_names
     _logger.info("Reading the list of nodes from the excel document")
@@ -37,6 +42,10 @@ def get_nodes_from_xl():
 
 
 def get_servers_from_config():
+    """
+    Получение адресов серверов из конфиг файла.
+    Сопоставление адреса по имени сервера из excel докумета.
+    """
     servers_json = os.getenv("SERVERS")
     servers_dict = json.loads(servers_json)
     _logger.info("Reading servers from config file")
