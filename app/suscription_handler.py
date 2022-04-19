@@ -15,7 +15,7 @@ class SubscriptionHandler:
     async def datachange_notification(self, node: Node, val, data):
         """
         Обработка уведомления об изменении показаний узла.
-        Создание обхъекта измерения и обновление показаний узла в нем
+        Создание объекта измерения и обновление показаний узла в нем
         :param node: объект узла
         :param val: значение узла
         """
@@ -28,7 +28,7 @@ class SubscriptionHandler:
         else:
             display_name = (await node.read_display_name()).Text
             value_type = await node.read_data_type_as_variant_type()
-            measurement = Measurement(node_id, display_name, value_type, val)
+            measurement = Measurement(node_id, display_name, value_type, val, False)
             nodes_dict.measurements[key] = measurement
 
     def event_notification(self, event):

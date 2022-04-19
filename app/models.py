@@ -2,7 +2,7 @@ class Measurement():
     """
     Класс для представления последнего измерения снятого с узла
     """
-    def __init__(self, node_id, display_name=None, value_type=None, last_value=None, health_is_good: bool = True):
+    def __init__(self, node_id, display_name=None, value_type=None, last_value=None, health_is_good: bool = False):
         """
         :param node_id: Строкове предствление node id узла
         :param display_name: Имя узла, отображаемое в OPC-сервере

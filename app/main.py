@@ -39,7 +39,8 @@ async def get_server_status(name: str):
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Server named {name} not found")
 
 
-@app.get("/control/{command}", description="Endpoint to control the gateway connection. Supported commands: \"start\", \"stop\", \"restart\"")
+@app.get("/control/{command}",
+         description="Endpoint to control the gateway connection. Supported commands: \"start\", \"stop\", \"restart\"")
 async def control(command: str):
     if command == "stop":
         await stop_connect_cycles()
@@ -53,3 +54,17 @@ async def control(command: str):
         return "restarting"
     else:
         return "unknown command"
+
+
+@app.post("/control/logs", description="Endpoint to control log level of gateway and libraries "
+                                       "(asyncua, uvicorn.access, uvicorn.error etc.)")
+async def change_log_level(logger_name: str, log_level: str):
+    log_level = log_level.upper()
+    logger = logging.getLogger(name=logger_name)
+    if logger:
+        logger.setLevel(log_level)
+        for h in logger.handlers:
+            h.setLevel(log_level)
+        return f"Log level for logger {logger_name} updated to {log_level}"
+    else:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, f"Logger with name {logger_name} not found")

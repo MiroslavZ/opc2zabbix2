@@ -38,7 +38,7 @@ async def run_connect_cycle(server: Server):
     state 2 - получение узлов и подписка
     state 3 - циклическая проверка сервера и узлов
     state 4 - отписка от узлов, удаление подписки, отсоединение клиента => state 1
-    :param server: Экземпляр сервера из словаря сереров
+    :param server: Экземпляр сервера из словаря серверов
     """
     address = server.address
     server.connection_params.client = Client(address)
@@ -48,6 +48,9 @@ async def run_connect_cycle(server: Server):
     required_nodes = []
     _logger.info(f"Started connect cycle for {server.name}")
     while 1:
+        if server.connection_params.connection_task.cancelled():
+            _logger.warning(f'Connection task for server {server.name} cancelled. Dropping connect cycle...')
+            return
         if state == 1:  # connect
             try:
                 await server.connection_params.client.connect()
@@ -105,7 +108,7 @@ async def run_connect_cycle(server: Server):
 async def get_required_nodes(client: Client, nodes_ids_str):
     """
     Формирование списка узлов по списку их node id.
-    client.get_node не провряет существование узла на сервере!
+    client.get_node не проверяет существование узла на сервере!
     :param client: Экземпляр OPC-клиента для получения узлов
     :param nodes_ids_str: Список строковых представлений node id узлов
     """
@@ -172,7 +175,7 @@ async def check_nodes_health(nodes: list):
 async def stop_connect_cycles():
     """
     Остановка шлюза.
-    Отмена задчи на подключение, изменение статуса подключения,
+    Отмена задачи на подключение, изменение статуса подключения,
     отписка от узлов, удаление подписки, отсоединение клиента
     """
     for server_key in servers.dictionary.keys():
@@ -182,7 +185,9 @@ async def stop_connect_cycles():
         cancelled = task.cancelled()
         if not cancelled:
             task.cancel()
+            _logger.info(f"Cancelled connection task for server {server.name}")
         if not server.status.connected:  # server already disconnected in connect cycle
+            _logger.warning(f"Server {server.name} has already been disconnected")
             return
         try:
             await task
@@ -200,7 +205,8 @@ async def stop_connect_cycles():
                 await asyncio.sleep(0)
             try:
                 _logger.info(f"Disconnecting from {server.name}")
-                await server.connection_params.client.disconnect()
                 server.status.connected = False
+                await server.connection_params.client.disconnect()
+                _logger.info(f"Server {server.name} disconnected successfully")
             except:
                 _logger.warning(f"Error with disconnecting from {server.name}")

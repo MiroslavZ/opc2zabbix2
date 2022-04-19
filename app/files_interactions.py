@@ -8,12 +8,24 @@ from app.models import Measurement
 from app.singleton import SingletonDict, DoubleKeyDict
 
 load_dotenv()
-log_level = os.getenv("LOG_LEVEL")
-logging.basicConfig(level=log_level)
-_logger = logging.getLogger(__name__)
 
 servers = SingletonDict()
 nodes_dict = DoubleKeyDict()
+
+
+def setup_loggers():
+    log_level = os.getenv("LOG_LEVEL")
+    logging.basicConfig(level=log_level)
+    asyncua_log_level = os.getenv("ASYNCUA_LOG_LEVEL")
+    logging.getLogger("asyncua").setLevel(asyncua_log_level)
+    uvicorn_log_level = os.getenv("UVICORN_LOG_LEVEL")
+    uvicorn_loggers = [logging.getLogger("uvicorn.access"), logging.getLogger("uvicorn.error")]
+    for ul in uvicorn_loggers:
+        ul.setLevel(uvicorn_log_level)
+
+
+setup_loggers()
+_logger = logging.getLogger(__name__)
 
 
 def get_nodes_from_xl():
