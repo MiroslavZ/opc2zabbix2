@@ -8,7 +8,6 @@ from app.additional_classes import Server, ConnectionParams
 from app.singleton import SingletonDict, DoubleKeyDict
 from app.suscription_handler import SubscriptionHandler
 
-
 _logger = logging.getLogger(__name__)
 
 servers = SingletonDict()
@@ -17,7 +16,7 @@ nodes_dict = DoubleKeyDict()
 
 async def connect_to_servers():
     """
-    Поключение к серверам. Планирование задачи на подключение для каждого сервера.
+    Подключение к серверам. Планирование задачи на подключение для каждого сервера.
     Сохранение ссылки на задачу для последующей отмены.
     """
     for server_key in servers.dictionary.keys():
@@ -77,7 +76,7 @@ async def run_connect_cycle(server: Server):
                 await asyncio.sleep(0)
         elif state == 3:  # read cyclic the service level if it fails disconnect & unsubscribe => reconnect
             service_level_is_normal = await check_service_level(server.connection_params.client, server)
-            all_nodes_is_normal = await check_nodes_health(required_nodes)
+            all_nodes_is_normal = await check_nodes_health(required_nodes, server)
             if not service_level_is_normal and not all_nodes_is_normal:
                 state = 4
                 _logger.warning(f"Error with checking status of server {server.name}")
@@ -148,14 +147,15 @@ async def check_service_level(client: Client, server: Server):
         return False
 
 
-async def check_nodes_health(nodes: list):
+async def check_nodes_health(nodes: list, server: Server):
     """
     Проверка здоровья узлов сервера.
     При значении отличном от GOOD в asyncua вызывается исключение.
+    :param server: Экземпляр сервера из словаря серверов
     :param nodes: список узлов для проверки
     :return: True - все узлы впорядке, False - есть проблемные узлы
     """
-    all_nodes_is_normal = True
+    normal_nodes_count = 0
     for node in nodes:
         node_id = node.nodeid.to_string()
         key = nodes_dict.node_elements[node_id].key
@@ -164,12 +164,19 @@ async def check_nodes_health(nodes: list):
             status = data_val.StatusCode.is_good()
             if key in nodes_dict.measurements.keys():
                 nodes_dict.measurements[key].health_is_good = status
+                normal_nodes_count += 1
         except:
-            all_nodes_is_normal = False
             _logger.warning(f"Error with checking status of node {node.nodeid.to_string()}")
             if key in nodes_dict.measurements.keys():
                 nodes_dict.measurements[key].health_is_good = False
-    return all_nodes_is_normal
+    normal_nodes_percent = (normal_nodes_count/len(server.nodes))
+    percentage_is_reached = normal_nodes_percent >= server.threshold_normal_nodes
+    if percentage_is_reached:
+        _logger.info(f"Percentage of normal nodes for server {server.name} is {normal_nodes_percent}")
+    else:
+        _logger.warning(f"Percentage of normal nodes ({normal_nodes_percent}) below the threshold "
+                        f"for {server.name} ({server.threshold_normal_nodes})")
+    return percentage_is_reached
 
 
 async def stop_connect_cycles():

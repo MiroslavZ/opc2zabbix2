@@ -59,7 +59,7 @@ class Server():
     Класс для представления OPC-сервера
     """
     def __init__(self, name: str, address: str = None, nodes=None, status: ServerStatus = ServerStatus(),
-                 connection_params: ConnectionParams = None):
+                 connection_params: ConnectionParams = None, threshold_normal_nodes: float = 0.95):
         """
         :param name: Имя сервера (Имя листа сервера из excel документа)
         :param address: Адрес сервера из конфиг файла
@@ -74,6 +74,7 @@ class Server():
         self.nodes = nodes
         self.status = status
         self.connection_params = connection_params
+        self.threshold_normal_nodes = threshold_normal_nodes
 
     def __str__(self):
         return f"Server with name {self.name}, address {self.address} and {len(self.nodes)} nodes"
