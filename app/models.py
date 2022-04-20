@@ -1,7 +1,13 @@
+from enum import Enum
+
+from pydantic import BaseModel, Field
+
+
 class Measurement():
     """
     Класс для представления последнего измерения снятого с узла
     """
+
     def __init__(self, node_id, display_name=None, value_type=None, last_value=None, health_is_good: bool = False):
         """
         :param node_id: Строкове предствление node id узла
@@ -15,3 +21,15 @@ class Measurement():
         self.value_type = value_type
         self.last_value = last_value
         self.health_is_good = health_is_good
+
+
+class LogLevel(Enum):
+    DEBUG = "DEBUG"
+    INFO = "INFO"
+    WARNING = "WARNING"
+    ERROR = "ERROR"
+    CRITICAL = "CRITICAL"
+
+
+class LoggerSettings(BaseModel):
+    log_level: LogLevel = Field(...)

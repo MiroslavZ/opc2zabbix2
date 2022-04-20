@@ -3,6 +3,7 @@ import logging
 from fastapi import FastAPI, HTTPException, status
 
 from app.files_interactions import get_servers_from_config, get_nodes_from_xl
+from app.models import LoggerSettings
 from app.server_interactions import connect_to_servers, stop_connect_cycles
 from app.singleton import DoubleKeyDict, SingletonDict
 
@@ -58,13 +59,12 @@ async def control(command: str):
 
 @app.post("/control/logs", description="Endpoint to control log level of gateway and libraries "
                                        "(asyncua, uvicorn.access, uvicorn.error etc.)")
-async def change_log_level(logger_name: str, log_level: str):
-    log_level = log_level.upper()
+async def change_log_level(logger_name: str, log_level: LoggerSettings):
     logger = logging.getLogger(name=logger_name)
     if logger:
-        logger.setLevel(log_level)
+        logger.setLevel(log_level.log_level.value)
         for h in logger.handlers:
-            h.setLevel(log_level)
-        return f"Log level for logger {logger_name} updated to {log_level}"
+            h.setLevel(log_level.log_level.value)
+        return f"Log level for logger {logger_name} updated to {log_level.log_level.value}"
     else:
         raise HTTPException(status.HTTP_404_NOT_FOUND, f"Logger with name {logger_name} not found")
