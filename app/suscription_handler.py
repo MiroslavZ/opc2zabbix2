@@ -1,4 +1,7 @@
 from asyncua import Node
+from asyncua.common.subscription import DataChangeNotif
+from asyncua.ua import StatusCode
+
 from app.models import Measurement
 from app.singleton import DoubleKeyDict
 import logging
@@ -12,10 +15,11 @@ class SubscriptionHandler:
     """
     Класс обработчика подписок
     """
-    async def datachange_notification(self, node: Node, val, data):
+    async def datachange_notification(self, node: Node, val, data: DataChangeNotif):
         """
         Обработка уведомления об изменении показаний узла.
         Создание объекта измерения и обновление показаний узла в нем
+        :param data: экземпляр уведомления содержащий дополнительную информацию об узле
         :param node: объект узла
         :param val: значение узла
         """
@@ -30,6 +34,3 @@ class SubscriptionHandler:
             value_type = await node.read_data_type_as_variant_type()
             measurement = Measurement(node_id, display_name, value_type, val, False)
             nodes_dict.measurements[key] = measurement
-
-    def event_notification(self, event):
-        print("New event", event)
