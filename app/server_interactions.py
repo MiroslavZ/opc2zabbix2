@@ -2,11 +2,11 @@ import asyncio
 import logging
 
 from asyncua import Client
-from asyncua.ua import NodeId
+from asyncua.ua import NodeId, UaStatusCodeError
 
 from app.additional_classes import Server, ConnectionParams
 from app.singleton import SingletonDict, DoubleKeyDict
-from app.suscription_handler import SubscriptionHandler
+from app.subscription_handler import SubscriptionHandler
 
 
 _logger = logging.getLogger(__name__)
@@ -48,9 +48,8 @@ async def run_connect_cycle(server: Server):
     required_nodes = []
     _logger.info(f"Started connect cycle for {server.name}")
     while 1:
-        if server.connection_params.connection_task.cancelled():
-            _logger.warning(f'Connection task for server {server.name} cancelled. Dropping connect cycle...')
-            return
+        if not server.status.connected:
+            state = 1
         if state == 1:  # connect
             try:
                 await server.connection_params.client.connect()
@@ -76,11 +75,14 @@ async def run_connect_cycle(server: Server):
                 state = 4
                 await asyncio.sleep(0)
         elif state == 3:  # read cyclic the service level if it fails disconnect & unsubscribe => reconnect
-            service_level_is_normal = await check_service_level(server.connection_params.client, server)
-            all_nodes_is_normal = await check_nodes_health(required_nodes)
-            if not service_level_is_normal and not all_nodes_is_normal:
-                state = 4
-                _logger.warning(f"Error with checking status of server {server.name}")
+            can_check_service_level, service_level_is_normal = await check_service_level(server.connection_params.client, server)
+            if can_check_service_level:
+                if not service_level_is_normal:
+                    state = 4
+                    _logger.warning(f"Service level of server {server.name} is not normal")
+            else:
+                if not server.status.connected:
+                    state = 4
             await asyncio.sleep(2)
         elif state == 4:  # unsubscribe, delete subscription then disconnect
             try:
@@ -95,8 +97,8 @@ async def run_connect_cycle(server: Server):
                 await asyncio.sleep(0)
             try:
                 _logger.info(f"Disconnecting from {server.name}")
-                await server.connection_params.client.disconnect()
                 server.status.connected = False
+                await server.connection_params.client.disconnect()
             except:
                 _logger.warning(f"Error with disconnecting from {server.name}")
             state = 1
@@ -132,44 +134,25 @@ async def subscribe_to_server_nodes(client: Client, nodes):
 async def check_service_level(client: Client, server: Server):
     """
     Проверка здоровья сервера через значение service level узла
-    При отсутствии узла - unknown
+    При отсутствии узла (при получении UaStatusCodeError) - значение unknown
+    При внезапной потере соединения (отключении сервера) статус connected меняется
     :param client: Экземпляр клиента
-    :param server: Экземпляр сервера из словаря сереров
-    :return: True - здоровье сервера в норме,
-    False - с сервером проблемы / не удалось проверить service level
+    :param server: Экземпляр сервера из словаря серверов
+    :return: два флага, сигнализирующих, удалось ли проверить service level и
+    является ли значение service level нормальным
     """
     try:
         service_level = await client.nodes.service_level.get_value()
         server.status.service_level = service_level
-        return service_level >= 200
-    except:
+        return True, service_level >= 200
+    except UaStatusCodeError as e:
         server.status.service_level = "unknown"
         _logger.warning(f"Failed to check server {server.name} status via service_level node")
-        return False
-
-
-async def check_nodes_health(nodes: list):
-    """
-    Проверка здоровья узлов сервера.
-    При значении отличном от GOOD в asyncua вызывается исключение.
-    :param nodes: список узлов для проверки
-    :return: True - все узлы впорядке, False - есть проблемные узлы
-    """
-    all_nodes_is_normal = True
-    for node in nodes:
-        node_id = node.nodeid.to_string()
-        key = nodes_dict.node_elements[node_id].key
-        try:
-            data_val = await node.read_data_value()
-            status = data_val.StatusCode.is_good()
-            if key in nodes_dict.measurements.keys():
-                nodes_dict.measurements[key].health_is_good = status
-        except:
-            all_nodes_is_normal = False
-            _logger.warning(f"Error with checking status of node {node.nodeid.to_string()}")
-            if key in nodes_dict.measurements.keys():
-                nodes_dict.measurements[key].health_is_good = False
-    return all_nodes_is_normal
+        return False, False
+    except ConnectionError as e:
+        server.status.connected = False
+        _logger.warning(f"Server {server.name} is disconnected ({e})")
+        return False, False
 
 
 async def stop_connect_cycles():
@@ -192,7 +175,7 @@ async def stop_connect_cycles():
         try:
             await task
         except asyncio.CancelledError:
-            _logger.info(f'Connection task for server {server.name} already cancelled')
+            _logger.info(f'Connection task for server {server.name} cancelled')
             try:
                 _logger.info(f"Unsubscribing from server {server.name}")
                 if server.connection_params.handles:
