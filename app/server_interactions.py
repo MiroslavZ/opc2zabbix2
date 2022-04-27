@@ -48,8 +48,6 @@ async def run_connect_cycle(server: Server):
     required_nodes = []
     _logger.info(f"Started connect cycle for {server.name}")
     while 1:
-        if not server.status.connected:
-            state = 1
         if state == 1:  # connect
             try:
                 await server.connection_params.client.connect()
