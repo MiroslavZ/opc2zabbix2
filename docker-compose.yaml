@@ -3,6 +3,6 @@ version: "3"
 services:
   web_service:
     build: .
-    container_name: example_container
+    container_name: opc_gateway
     ports:
     - "8000:8000"
