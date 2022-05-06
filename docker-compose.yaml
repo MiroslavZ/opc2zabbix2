@@ -6,3 +6,4 @@ services:
     container_name: opc_gateway
     ports:
     - "8000:8000"
+    restart: always
