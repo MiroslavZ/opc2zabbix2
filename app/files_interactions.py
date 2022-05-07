@@ -56,7 +56,7 @@ def get_nodes_from_xl():
 def get_servers_from_config():
     """
     Получение адресов серверов из конфиг файла.
-    Сопоставление адреса по имени сервера из excel докумета.
+    Сопоставление адреса по имени сервера из excel документа.
     """
     servers_json = os.getenv("SERVERS")
     servers_dict = json.loads(servers_json)
@@ -68,10 +68,6 @@ def get_servers_from_config():
             _logger.info(f"Loaded server {name} with address {servers_dict[name]}")
         else:
             undeclared += 1
+            servers.dictionary[name] = Server(name=name, address=servers_dict[name])
             _logger.warning(f"Server {name} with address {servers_dict[name]} not declared in excel document!")
     _logger.info(f"Loaded {len(servers_dict.keys())-undeclared} servers from config")
-
-
-# if __name__ == '__main__':
-#     get_nodes_from_xl()
-#     get_servers_from_config()
