@@ -1,9 +1,10 @@
+import logging
 from json import JSONDecodeError
 
 import pytest
 
 from app.additional_classes import Server
-from app.files_interactions import get_servers_from_config
+from app.files_interactions import get_servers_from_config, setup_loggers
 from app.singleton import SingletonDict
 
 
@@ -32,3 +33,15 @@ def test_get_few_correct_servers(add_few_servers_into_config):
 def test_invalid_json(add_invalid_server_into_config):
     with pytest.raises(JSONDecodeError):
         get_servers_from_config()
+
+
+def test_empty_server(clear_server_into_config):
+    with pytest.raises(JSONDecodeError):
+        get_servers_from_config()
+
+
+def test_correct_loggers_config(add_loggers_variables):
+    setup_loggers()
+    assert logging.getLogger("asyncua").level == 20 \
+           and logging.getLogger("uvicorn.access").level == 30 \
+           and logging.getLogger("uvicorn.error").level == 30

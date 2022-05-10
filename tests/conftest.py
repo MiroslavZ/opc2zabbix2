@@ -32,15 +32,9 @@ def add_invalid_server_into_config():
     clear_servers_dict()
 
 
-def clear_servers_dict():
-    servers = SingletonDict()
-    servers.dictionary.clear()
-
-
-def clear_nodes_dict():
-    nodes_dict = DoubleKeyDict()
-    nodes_dict.node_elements.clear()
-    nodes_dict.measurements.clear()
+@pytest.fixture
+def clear_server_into_config():
+    os.unsetenv("SERVERS")
 
 
 @pytest.fixture
@@ -86,5 +80,23 @@ def generate_test_table_with_few_servers():
     clear_nodes_dict()
 
 
-if __name__ == '__main__':
-    generate_test_table_with_few_servers()
+@pytest.fixture
+def add_loggers_variables():
+    os.environ["LOG_LEVEL"] = 'DEBUG'
+    os.environ["ASYNCUA_LOG_LEVEL"] = 'INFO'
+    os.environ["UVICORN_LOG_LEVEL"] = 'WARNING'
+    yield
+    os.unsetenv("LOG_LEVEL")
+    os.unsetenv("ASYNCUA_LOG_LEVEL")
+    os.unsetenv("UVICORN_LOG_LEVEL")
+
+
+def clear_servers_dict():
+    servers = SingletonDict()
+    servers.dictionary.clear()
+
+
+def clear_nodes_dict():
+    nodes_dict = DoubleKeyDict()
+    nodes_dict.node_elements.clear()
+    nodes_dict.measurements.clear()

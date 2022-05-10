@@ -8,7 +8,6 @@ from app.additional_classes import Server, ConnectionParams
 from app.singleton import SingletonDict, DoubleKeyDict
 from app.subscription_handler import SubscriptionHandler
 
-
 _logger = logging.getLogger(__name__)
 
 servers = SingletonDict()
@@ -16,10 +15,6 @@ nodes_dict = DoubleKeyDict()
 
 
 async def connect_to_servers():
-    """
-    Подключение к серверам. Планирование задачи на подключение для каждого сервера.
-    Сохранение ссылки на задачу для последующей отмены.
-    """
     for server_key in servers.dictionary.keys():
         server = servers.dictionary[server_key]
         if server.status.connected:
@@ -45,64 +40,86 @@ async def run_connect_cycle(server: Server):
     server.connection_params.subscription = None
     server.connection_params.handles = None
     state = 1
-    required_nodes = []
     _logger.info(f"Started connect cycle for {server.name}")
     while 1:
         if state == 1:  # connect
-            try:
-                await server.connection_params.client.connect()
-                _logger.info(f"Client successfully connected to {server.name}")
-                server.status.connected = True
-                state = 2
-            except:
-                _logger.warning(f"Unable to connect to server {server.name}")
-                state = 1
-                await asyncio.sleep(2)
+            state = await connect_to_server(server)
         elif state == 2:  # get nodes & subscribe
-            try:
-                nodes_list = map(lambda node: node.node_id, server.nodes)
-                required_nodes = list(await get_required_nodes(server.connection_params.client, nodes_list))
-                _logger.info(f"{len(required_nodes)} nodes received from {server.name}")
-                subscription, handles = await subscribe_to_server_nodes(server.connection_params.client, required_nodes)
-                server.connection_params.subscription = subscription
-                server.connection_params.handles = handles
-                _logger.info(f"Created subscription for {server.name}")
-                state = 3
-            except:
-                _logger.warning(f"Error with subscription to {server.name}")
-                state = 4
-                await asyncio.sleep(0)
+            state = await get_nodes_and_subscribe(server)
         elif state == 3:  # read cyclic the service level if it fails disconnect & unsubscribe => reconnect
-            can_check_service_level, service_level_is_normal = await check_service_level(server.connection_params.client, server)
-            if can_check_service_level:
-                if not service_level_is_normal:
-                    state = 4
-                    _logger.warning(f"Service level of server {server.name} is not normal")
-            else:
-                if not server.status.connected:
-                    state = 4
-            await asyncio.sleep(2)
+            state = await check_server_state(server)
         elif state == 4:  # unsubscribe, delete subscription then disconnect
-            try:
-                _logger.info(f"Unsubscribing from server {server.name}")
-                if server.connection_params.handles:
-                    await server.connection_params.subscription.unsubscribe(server.connection_params.handles)
-                await server.connection_params.subscription.delete()
-            except:
-                _logger.exception(f"Error with unsubscribing from {server.name}")
-                server.connection_params.subscription = None
-                server.connection_params.handles = []
-                await asyncio.sleep(0)
-            try:
-                _logger.info(f"Disconnecting from {server.name}")
-                server.status.connected = False
-                await server.connection_params.client.disconnect()
-            except:
-                _logger.warning(f"Error with disconnecting from {server.name}")
-            state = 1
+            state = await disconnect_from_server(server)
         else:
             state = 1
             await asyncio.sleep(2)
+
+
+async def connect_to_server(server: Server):  # state 1
+    try:
+        await server.connection_params.client.connect()
+        _logger.info(f"Client successfully connected to {server.name}")
+        server.status.connected = True
+        state = 2
+    except:
+        _logger.warning(f"Unable to connect to server {server.name}")
+        state = 1
+        await asyncio.sleep(2)
+    return state
+
+
+async def get_nodes_and_subscribe(server: Server) -> int:  # state 2
+    try:
+        nodes_list = map(lambda node: node.node_id, server.nodes)
+        required_nodes = list(await get_required_nodes(server.connection_params.client, nodes_list))
+        _logger.info(f"{len(required_nodes)} nodes received from {server.name}")
+        subscription, handles = await subscribe_to_server_nodes(server.connection_params.client, required_nodes)
+        server.connection_params.subscription = subscription
+        server.connection_params.handles = handles
+        _logger.info(f"Created subscription for {server.name}")
+        state = 3
+    except:
+        _logger.warning(f"Error with subscription to {server.name}")
+        state = 4
+        await asyncio.sleep(0)
+    return state
+
+
+async def check_server_state(server: Server):  # state 3
+    can_check_service_level, service_level_is_normal = \
+        await check_service_level(server.connection_params.client, server)
+    state = 3
+    if can_check_service_level:
+        if not service_level_is_normal:
+            state = 4
+            _logger.warning(f"Service level of server {server.name} is not normal")
+    else:
+        if not server.status.connected:
+            state = 4
+            _logger.info(f"Lost connection with server {server.name}")
+    await asyncio.sleep(2)
+    return state
+
+
+async def disconnect_from_server(server: Server):  # state 4
+    state = 1
+    try:
+        _logger.info(f"Unsubscribing from server {server.name}")
+        if server.connection_params.handles:
+            await server.connection_params.subscription.unsubscribe(server.connection_params.handles)
+        await server.connection_params.subscription.delete()
+    except:
+        _logger.exception(f"Error with unsubscribing from {server.name}")
+        server.connection_params.subscription = None
+        server.connection_params.handles = []
+        await asyncio.sleep(0)
+    try:
+        _logger.info(f"Disconnecting from {server.name}")
+        server.status.connected = False
+        await server.connection_params.client.disconnect()
+    except:
+        _logger.warning(f"Error with disconnecting from {server.name}")
+    return state
 
 
 async def get_required_nodes(client: Client, nodes_ids_str):
@@ -177,7 +194,8 @@ async def stop_connect_cycles():
             try:
                 _logger.info(f"Unsubscribing from server {server.name}")
                 if server.connection_params.handles:
-                    await server.connection_params.subscription.unsubscribe(server.connection_params.handles)
+                    await server.connection_params.subscription.unsubscribe(
+                        server.connection_params.handles)
                 await server.connection_params.subscription.delete()
             except:
                 _logger.warning(f"Error with unsubscribing from {server.name}")

@@ -41,7 +41,8 @@ async def get_server_status(name: str):
 
 
 @app.get("/control/{command}",
-         description="Endpoint to control the gateway connection. Supported commands: \"start\", \"stop\", \"restart\"")
+         description="Endpoint to control the gateway connection. "
+                     "Supported commands: \"start\", \"stop\", \"restart\"")
 async def control(command: str):
     if command == "stop":
         await stop_connect_cycles()
