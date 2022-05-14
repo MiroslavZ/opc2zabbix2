@@ -135,6 +135,24 @@ async def create_empty_server():
 
 
 @pytest.fixture
+async def create_empty_not_working_server():
+    server = Server()
+    await server.init()
+    server.disable_clock()
+    server.set_endpoint(f'opc.tcp://127.0.0.1:54000')
+    server.set_server_name("FreeOpcUa Example Server")
+    server.set_security_policy([
+        ua.SecurityPolicyType.NoSecurity,
+        ua.SecurityPolicyType.Basic256Sha256_SignAndEncrypt,
+        ua.SecurityPolicyType.Basic256Sha256_Sign])
+
+    uri = "http://examples.freeopcua.github.io"
+    idx = await server.register_namespace(uri)
+
+    yield server
+
+
+@pytest.fixture
 async def create_server_with_one_node():
     server = Server()
     await server.init()
@@ -165,16 +183,11 @@ async def get_server_client_and_one_node_id(create_server_with_one_node):
     clear_nodes_dict()
 
 
-# цикл while не дает выполниться yield но как тогда писать в переменную в фоне?
-# без обновления переменной мы не получим уведомление для теста
-# @pytest.fixture
-# async def get_server_client_and_one_node_id_with_periodic_write(create_server_with_one_node):
-#     temp_server: Server = create_server_with_one_node[0]
-#     node_id: NodeId = create_server_with_one_node[1]
-#     client = Client(temp_server.endpoint.geturl())
-#     async with client:
-#         myvar = client.get_node(node_id)
-#         task = asyncio.create_task(write_tag_task(temp_server, myvar))
-#         yield temp_server, client, node_id.to_string()
-#         task.cancel()
-#     clear_nodes_dict()
+
+@pytest.fixture
+async def get_server_client(create_server_with_one_node):
+    temp_server: Server = create_server_with_one_node[0]
+    client = Client(temp_server.endpoint.geturl())
+    async with client:
+        # await client.nodes.service_level.set_value(0) # писать кривой service level нельзя
+        yield temp_server, client

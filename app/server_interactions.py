@@ -63,6 +63,7 @@ async def connect_to_server(server: Server):  # state 1
         state = 2
     except:
         _logger.warning(f"Unable to connect to server {server.name}")
+        server.status.connected = False
         state = 1
         await asyncio.sleep(2)
     return state
