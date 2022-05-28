@@ -1,14 +1,13 @@
-import asyncio
-from datetime import datetime
-
+import asyncua
 import pytest
 import os
 import pandas as pd
-from asyncua import Server, ua, Client, Node
-from asyncua.ua import NodeId, DataValue
+from asyncua import ua, Client
 from pandas import DataFrame
 
+from app import additional_classes
 from app.singleton import SingletonDict, DoubleKeyDict
+from app.subscription_handler import SubscriptionHandler
 
 
 def clear_servers_dict():
@@ -22,19 +21,10 @@ def clear_nodes_dict():
     nodes_dict.measurements.clear()
 
 
-async def write_tag_task(server: Server, myvar: Node):
-    n = 0
-    while True:
-        await server.write_attribute_value(myvar.nodeid, DataValue(n))
-        n += 1
-
-
 @pytest.fixture
 def add_one_server_into_config():
     os.environ["SERVERS"] = '{"MyServer1":"opc.tcp://192.168.0.8:54000"}'
-    # передача управления тесту
     yield
-    # очистка после теста
     os.unsetenv("SERVERS")
     clear_servers_dict()
 
@@ -115,46 +105,8 @@ def add_loggers_variables():
 
 
 @pytest.fixture
-async def create_empty_server():
-    server = Server()
-    await server.init()
-    server.disable_clock()
-    server.set_endpoint(f'opc.tcp://127.0.0.1:54000')
-    server.set_server_name("FreeOpcUa Example Server")
-    server.set_security_policy([
-        ua.SecurityPolicyType.NoSecurity,
-        ua.SecurityPolicyType.Basic256Sha256_SignAndEncrypt,
-        ua.SecurityPolicyType.Basic256Sha256_Sign])
-
-    uri = "http://examples.freeopcua.github.io"
-    idx = await server.register_namespace(uri)
-
-    await server.start()
-    yield server
-    await server.stop()
-
-
-@pytest.fixture
-async def create_empty_not_working_server():
-    server = Server()
-    await server.init()
-    server.disable_clock()
-    server.set_endpoint(f'opc.tcp://127.0.0.1:54000')
-    server.set_server_name("FreeOpcUa Example Server")
-    server.set_security_policy([
-        ua.SecurityPolicyType.NoSecurity,
-        ua.SecurityPolicyType.Basic256Sha256_SignAndEncrypt,
-        ua.SecurityPolicyType.Basic256Sha256_Sign])
-
-    uri = "http://examples.freeopcua.github.io"
-    idx = await server.register_namespace(uri)
-
-    yield server
-
-
-@pytest.fixture
-async def create_server_with_one_node():
-    server = Server()
+async def create_server_with_few_nodes():
+    server = asyncua.Server()
     await server.init()
     server.disable_clock()
     server.set_endpoint(f'opc.tcp://127.0.0.1:54000')
@@ -168,26 +120,72 @@ async def create_server_with_one_node():
     idx = await server.register_namespace(uri)
 
     myobj = await server.nodes.objects.add_object(idx, 'MyObject')
-    myvar = await myobj.add_variable(idx, 'MyVariable', 10)
+    myvar_1 = await myobj.add_variable(idx, 'MyVariable1', 10)
+    myvar_2 = await myobj.add_variable(idx, 'MyVariable2', 20)
+    myvar_3 = await myobj.add_variable(idx, 'MyVariable3', 30)
     async with server:
-        yield server, myvar.nodeid
+        yield server, [myvar_1.nodeid, myvar_2.nodeid, myvar_3.nodeid]
 
 
 @pytest.fixture
-async def get_server_client_and_one_node_id(create_server_with_one_node):
-    temp_server: Server = create_server_with_one_node[0]
-    node_id: NodeId = create_server_with_one_node[1]
-    client = Client(temp_server.endpoint.geturl())
-    async with client:
-        yield temp_server, client, node_id.to_string()
-    clear_nodes_dict()
-
+async def create_server(create_server_with_few_nodes):
+    temp_server: asyncua.Server = create_server_with_few_nodes[0]
+    address = temp_server.endpoint.geturl()
+    server = additional_classes.Server(name=temp_server.name, address=address)
+    params = additional_classes.ConnectionParams(client=Client(address))
+    server.connection_params = params
+    yield server
+    await server.connection_params.client.disconnect()
 
 
 @pytest.fixture
-async def get_server_client(create_server_with_one_node):
-    temp_server: Server = create_server_with_one_node[0]
-    client = Client(temp_server.endpoint.geturl())
+async def create_not_working_server(create_server_with_few_nodes):
+    temp_server: asyncua.Server = create_server_with_few_nodes[0]
+    address = temp_server.endpoint.geturl()
+    server = additional_classes.Server(name=temp_server.name, address=address)
+    params = additional_classes.ConnectionParams(client=Client(address))
+    server.connection_params = params
+    await temp_server.stop()
+    yield server
+
+
+@pytest.fixture
+async def create_server_with_connected_client(create_server_with_few_nodes):
+    temp_server: asyncua.Server = create_server_with_few_nodes[0]
+    nodes_ids = create_server_with_few_nodes[1]
+    address = temp_server.endpoint.geturl()
+    server = additional_classes.Server(name=temp_server.name, address=address)
+    client = Client(address)
+    params = additional_classes.ConnectionParams(client=client)
+    server.connection_params = params
+    server.nodes = [
+        additional_classes.Node("MyVar1", "MyVar1", nodes_ids[0].to_string()),
+        additional_classes.Node("MyVar2", "MyVar2", nodes_ids[1].to_string()),
+        additional_classes.Node("MyVar3", "MyVar3", nodes_ids[2].to_string()),
+    ]
     async with client:
-        # await client.nodes.service_level.set_value(0) # писать кривой service level нельзя
-        yield temp_server, client
+        yield server, temp_server
+
+
+@pytest.fixture
+async def create_server_with_subscribed_client(create_server_with_few_nodes):
+    temp_server: asyncua.Server = create_server_with_few_nodes[0]
+    nodes_ids = create_server_with_few_nodes[1]
+    address = temp_server.endpoint.geturl()
+    server = additional_classes.Server(name=temp_server.name, address=address)
+    client = Client(address)
+    params = additional_classes.ConnectionParams(client=client)
+    server.connection_params = params
+    server.nodes = [
+        additional_classes.Node("MyVar1", "MyVar1", nodes_ids[0].to_string()),
+        additional_classes.Node("MyVar2", "MyVar2", nodes_ids[1].to_string()),
+        additional_classes.Node("MyVar3", "MyVar3", nodes_ids[2].to_string()),
+    ]
+    async with client:
+        handler = SubscriptionHandler()
+        subscription = await client.create_subscription(500, handler)
+        nodes = list(map(lambda n: client.get_node(n), nodes_ids))
+        handles = await subscription.subscribe_data_change(nodes)
+        server.connection_params.subscription = subscription
+        server.connection_params.handles = handles
+        yield server, temp_server

@@ -5,3 +5,4 @@ pandas~=1.4.1
 asyncua~=0.9.92
 python-dotenv~=0.19.2
 openpyxl
+pytest~=7.1.2
