@@ -52,14 +52,13 @@ def clear_server_into_config():
 
 @pytest.fixture
 def generate_test_table_with_one_node():
+    clear_servers_dict()
+    clear_nodes_dict()
     nodes = {"Item": pd.Series(["Тестовый тег 2"]),
              "Key": pd.Series(["TestTag2"]),
              "Node": pd.Series(["ns=1;s=PN_SIMULATOR.PD_SIMULATOR.TestTag2"])}
     df = DataFrame(nodes)
     df.to_excel("../nodes.xlsx", index=False, sheet_name="MyServer1")
-    yield
-    clear_servers_dict()
-    clear_nodes_dict()
 
 
 @pytest.fixture
@@ -69,9 +68,9 @@ def generate_test_table_with_few_nodes():
              "Node": pd.Series(["ns=1;s=PN_SIMULATOR.PD_SIMULATOR.TestTag2",
                                 "ns=1;s=PN_SIMULATOR.PD_SIMULATOR.TestTag3",
                                 "ns=1;s=PN_SIMULATOR.PD_SIMULATOR.TestTag4"])}
+    writer = pd.ExcelWriter('../nodes.xlsx', engine='xlsxwriter')
     df = DataFrame(nodes)
-    df.to_excel("../nodes.xlsx", index=False, sheet_name="MyServer1")
-    yield
+    df.to_excel(writer, sheet_name="MyServer1", index=False)
     clear_servers_dict()
     clear_nodes_dict()
 
@@ -83,12 +82,12 @@ def generate_test_table_with_few_servers():
              "Node": pd.Series(["ns=1;s=PN_SIMULATOR.PD_SIMULATOR.TestTag2",
                                 "ns=1;s=PN_SIMULATOR.PD_SIMULATOR.TestTag3",
                                 "ns=1;s=PN_SIMULATOR.PD_SIMULATOR.TestTag4"])}
-    with pd.ExcelWriter("../nodes.xlsx") as writer:
-        df = DataFrame(nodes)
-        df.to_excel(writer, sheet_name="MyServer1", index=False)
-        df.to_excel(writer, sheet_name="MyServer2", index=False)
-        df.to_excel(writer, sheet_name="MyServer3", index=False)
-    yield
+    writer = pd.ExcelWriter('../nodes.xlsx', engine='xlsxwriter')
+    df = DataFrame(nodes)
+    df.to_excel(writer, sheet_name="MyServer1", index=False)
+    df.to_excel(writer, sheet_name="MyServer2", index=False)
+    df.to_excel(writer, sheet_name="MyServer3", index=False)
+    writer.save()
     clear_servers_dict()
     clear_nodes_dict()
 
@@ -189,3 +188,21 @@ async def create_server_with_subscribed_client(create_server_with_few_nodes):
         server.connection_params.subscription = subscription
         server.connection_params.handles = handles
         yield server, temp_server
+
+
+@pytest.fixture
+async def create_server_dictionary(create_server_with_few_nodes):
+    clear_servers_dict()
+    temp_server: asyncua.Server = create_server_with_few_nodes[0]
+    nodes_ids = create_server_with_few_nodes[1]
+    address = temp_server.endpoint.geturl()
+    server = additional_classes.Server(name=temp_server.name, address=address)
+    server.nodes = [
+        additional_classes.Node("MyVar1", "MyVar1", nodes_ids[0].to_string()),
+        additional_classes.Node("MyVar2", "MyVar2", nodes_ids[1].to_string()),
+        additional_classes.Node("MyVar3", "MyVar3", nodes_ids[2].to_string()),
+    ]
+    servers = SingletonDict()
+    servers.dictionary[server.name] = server
+    yield
+    clear_servers_dict()

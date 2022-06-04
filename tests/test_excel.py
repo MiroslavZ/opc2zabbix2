@@ -6,13 +6,15 @@ from app.singleton import DoubleKeyDict, SingletonDict
 def test_correct_nodes_count(generate_test_table_with_few_nodes):
     get_nodes_from_xl()
     nodes_dict = DoubleKeyDict()
-    assert len(nodes_dict.node_elements.keys()) == 3
+    nodes_count = len(nodes_dict.node_elements.keys())
+    assert nodes_count == 3
 
 
 def test_get_correct_servers_count(generate_test_table_with_few_servers):
     get_nodes_from_xl()
     servers = SingletonDict()
-    assert len(servers.dictionary.keys()) == 3
+    servers_count = len(servers.dictionary.keys())
+    assert servers_count == 3
 
 
 def test_get_correct_server_name(generate_test_table_with_one_node):
