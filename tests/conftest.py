@@ -1,3 +1,5 @@
+import asyncio
+
 import asyncua
 import pytest
 import os
@@ -5,7 +7,7 @@ import pandas as pd
 from asyncua import ua, Client
 from pandas import DataFrame
 
-from app import additional_classes
+from app import additional_classes, models
 from app.singleton import SingletonDict, DoubleKeyDict
 from app.subscription_handler import SubscriptionHandler
 
@@ -206,3 +208,41 @@ async def create_server_dictionary(create_server_with_few_nodes):
     servers.dictionary[server.name] = server
     yield
     clear_servers_dict()
+
+
+@pytest.fixture
+async def create_server_with_subscribed_client_for_sub_handler(create_server_with_few_nodes):
+    clear_nodes_dict()
+    temp_server: asyncua.Server = create_server_with_few_nodes[0]
+    nodes_ids = create_server_with_few_nodes[1]
+    address = temp_server.endpoint.geturl()
+    server = additional_classes.Server(name=temp_server.name, address=address)
+    client = Client(address)
+    params = additional_classes.ConnectionParams(client=client)
+    server.connection_params = params
+    server.nodes = [
+        additional_classes.Node("MyVar1", "MyVar1", nodes_ids[0].to_string()),
+        additional_classes.Node("MyVar2", "MyVar2", nodes_ids[1].to_string()),
+        additional_classes.Node("MyVar3", "MyVar3", nodes_ids[2].to_string()),
+    ]
+    nodes_dict = DoubleKeyDict()
+    for node in server.nodes:
+        nodes_dict.node_elements[node.node_id] = node
+        nodes_dict.measurements[node.key] = models.Measurement(node.node_id)
+    async with client:
+        handler = SubscriptionHandler()
+        subscription = await client.create_subscription(500, handler)
+        nodes = list(map(lambda n: client.get_node(n), nodes_ids))
+        handles = await subscription.subscribe_data_change(nodes)
+        server.connection_params.subscription = subscription
+        server.connection_params.handles = handles
+        write_task = asyncio.create_task(cyclic_write(client=client, node=nodes[0]))
+        yield server, temp_server
+        write_task.cancel()
+
+
+async def cyclic_write(client: asyncua.Client, node: asyncua.Node):
+    n = 0
+    while True:
+        await node.write_value(n)
+        n += 1
