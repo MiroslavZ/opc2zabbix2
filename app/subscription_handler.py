@@ -6,6 +6,7 @@ from app.models import Measurement
 from app.singleton import DoubleKeyDict
 import logging
 
+from app.utils import convert_to_type
 
 _logger = logging.getLogger(__name__)
 nodes_dict = DoubleKeyDict()
@@ -29,7 +30,8 @@ class SubscriptionHandler:
         key = nodes_dict.node_elements[node_id].key
         health_is_good = data.monitored_item.Value.StatusCode_.is_good()
         if key in nodes_dict.measurements.keys() and nodes_dict.measurements[key].last_value is not None:
-            nodes_dict.measurements[key].last_value = val
+            type = nodes_dict.measurements[key].value_type
+            nodes_dict.measurements[key].last_value = convert_to_type(val,type)
             nodes_dict.measurements[key].health_is_good = health_is_good
         else:
             display_name = (await node.read_display_name()).Text
