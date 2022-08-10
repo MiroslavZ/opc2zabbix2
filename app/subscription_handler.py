@@ -26,7 +26,7 @@ class SubscriptionHandler:
         """
         node_id = node.nodeid.to_string()
         if node_id not in nodes_dict.node_elements.keys():
-            _logger.warning(f"Received notification from unknown node ({node_id}) ")
+            _logger.warning(f"Received notification from unknown node ({node_id})")
         key = nodes_dict.node_elements[node_id].key
         health_is_good = data.monitored_item.Value.StatusCode_.is_good()
         if key in nodes_dict.measurements.keys() and nodes_dict.measurements[key].last_value is not None:
